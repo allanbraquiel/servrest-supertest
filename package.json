@@ -1,0 +1,16 @@
+{
+  "name": "servrest",
+  "version": "1.0.0",
+  "description": "Realização dos testes no ServRest",
+  "license": "ISC",
+  "author": "Allan Braquiel",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "dependencies": {
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4"
+  }
+}
