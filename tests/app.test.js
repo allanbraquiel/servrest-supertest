@@ -3,6 +3,7 @@ const apiUrl = "http://localhost:3003";
 
 let createdUserId;
 let createdProductId;
+let createdCartId;
 let bearerToken;
 
 describe("API ServRest - Login", () => {
@@ -20,7 +21,7 @@ describe("API ServRest - Login", () => {
               "Login realizado com sucesso"
             );
             expect(response.body).toHaveProperty("authorization");
-            bearerToken = response.body.authorization.replace(/^Bearer\s+/i, "");
+            bearerToken = response.body.authorization.replace(/^Bearer\s+/i, "")
         });
     });
 
@@ -44,7 +45,7 @@ describe("API ServRest - Usuários", () => {
     return request(apiUrl)
       .post("/usuarios")
       .send({
-        nome: `Usuário Teste+${Date.now()}`,
+        nome: `Usuário Teste + ${Date.now()}`,
         email: `teste+${Date.now()}@exemplo.com`,
         password: "senha123",
         administrador: "false",
@@ -269,23 +270,77 @@ describe("API ServRest - Produtos", () => {
       expect(typeof product._id).toBe("string");
     }
   });
-})
+});
 
 describe("API ServRest - Carrinhos", () => {
+  // Faz login e popula bearerToken antes dos it() deste describe
+  beforeAll(() => {
+    return request(apiUrl)
+      .post("/login")
+      .send({
+        email: "fulano@qa.com",
+        password: "teste",
+      })
+      .then((response) => {
+        expect(200).toBe(response.status);
+        expect(response.body).toHaveProperty(
+          "message",
+          "Login realizado com sucesso"
+        );
+        expect(response.body).toHaveProperty("authorization");
+        bearerToken = response.body.authorization.replace(/^Bearer\s+/i, "");
+      });
+  });
 
-     it("Listar Carrinhos", () => {
-       return request(apiUrl)
-         .get("/carrinhos")
-         .then((response) => {
-           expect(200).toBe(response.status);
-         });
-     });
+  it("Cadastrar Carrinho", () => {
+    return request(apiUrl)
+      .post("/carrinhos")
+      .set("Authorization", `Bearer ${bearerToken}`)
+      .send({
+        produtos: [
+          {
+            idProduto: "BeeJh5lz3k6kSIzA",
+            quantidade: 2,
+          },
+        ],
+      })
+      .then((response) => {
+        expect(201).toBe(response.status);
+        expect(response.body).toHaveProperty("_id");
+        expect(response.body).toHaveProperty(
+          "message",
+          "Cadastro realizado com sucesso"
+        );
 
+        const id = response.body._id;
+        expect(id).toBeDefined();
+        createdCartId = id;
+      });
+  });
 
+   it("Consultar Carrinhos", () => {
+     return request(apiUrl)
+       .get(`/carrinhos/${createdCartId}`)
+       .then((response) => {
+         expect(200).toBe(response.status);
+       });
+   });
 
-})
+  it("Concluir compra", () => {
+    return request(apiUrl)
+      .delete(`/carrinhos/concluir-compra`)
+      .set("Authorization", `Bearer ${bearerToken}`)
+      .then((response) => {
+        expect(200).toBe(response.status);
+        expect(response.body).toHaveProperty(
+          "message",
+          "Registro excluído com sucesso"
+        );
+      });
+  });
+});
 
-describe.only("Teste completo do fluxo de compra", () => {
+describe("Teste completo do fluxo de compra", () => {
 
   it("Cadastrar Usuário", () => {
     return request(apiUrl)
@@ -366,22 +421,22 @@ describe.only("Teste completo do fluxo de compra", () => {
 
   it('Incluir produto no carrinho', () => {
     return request(apiUrl)
-      .post('/carrinhos')
-      .set('Authorization', `Bearer ${bearerToken}`)
+      .post("/carrinhos")
+      .set("Authorization", `Bearer ${bearerToken}`)
       .send({
         produtos: [
           {
-            id: createdProductId,
-            quantidade: 2
-          }
-        ]
+            idProduto: "BeeJh5lz3k6kSIzA",
+            quantidade: 2,
+          },
+        ],
       })
       .then((response) => {
         expect(201).toBe(response.status);
         expect(response.body).toHaveProperty("_id");
         expect(response.body).toHaveProperty(
           "message",
-          "Produto adicionado ao carrinho com sucesso"
+          "Cadastro realizado com sucesso"
         );
 
         const id = response.body._id;
@@ -412,17 +467,5 @@ describe.only("Teste completo do fluxo de compra", () => {
           "Registro excluído com sucesso"
         );
       });
-    
   });
-
-
-
-
-
-
-})
-
-
-
-
-
+});
