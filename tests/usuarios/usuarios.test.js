@@ -11,7 +11,7 @@ describe("API ServRest - Usuários", () => {
     return request(apiUrl)
       .post("/usuarios")
       .send({
-        nome: `Usuário Teste + ${Date.now()}`,
+        nome: `Usuário Teste ${Date.now()}`,
         email: `teste+${Date.now()}@exemplo.com`,
         password: "senha123",
         administrador: "false",

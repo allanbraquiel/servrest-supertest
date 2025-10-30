@@ -1,6 +1,7 @@
 const request = require("supertest");
 const apiUrl = "http://localhost:3000";
 
+let createdUserId;
 let createdProductId;
 let createdCartId;
 let bearerToken;
@@ -11,8 +12,8 @@ describe("Fluxo de compra: concluir compra", () => {
     return request(apiUrl)
       .post("/usuarios")
       .send({
-        nome: `Usuário Teste+${Date.now()}`,
-        email: `teste+${Date.now()}@exemplo.com`,
+        nome: `Usuário Teste ${Date.now()}`,
+        email: `teste${Date.now()}@exemplo.com`,
         password: "senha123",
         administrador: "false",
       })
@@ -52,10 +53,10 @@ describe("Fluxo de compra: concluir compra", () => {
       .post("/produtos")
       .set("Authorization", `Bearer ${bearerToken}`)
       .send({
-        nome: `Produto Teste+${Date.now()}`,
+        nome: `Produto Teste ${Date.now()}`,
         preco: 100,
-        descricao: `Descrição do Produto Teste+${Date.now()}`,
-        quantidade: 10,
+        descricao: `Descrição do Produto Teste ${Date.now()}`,
+        quantidade: 200,
       })
       .then((response) => {
         expect(201).toBe(response.status);
@@ -91,7 +92,7 @@ describe("Fluxo de compra: concluir compra", () => {
       .send({
         produtos: [
           {
-            idProduto: "BeeJh5lz3k6kSIzA",
+            idProduto: createdProductId,
             quantidade: 2,
           },
         ],
@@ -130,6 +131,29 @@ describe("Fluxo de compra: concluir compra", () => {
         expect(response.body).toHaveProperty(
           "message",
           "Registro excluído com sucesso"
+        );
+      });
+  });
+
+  it("Deletar produto cadastrado", () => {
+      return request(apiUrl)
+        .delete(`/produtos/${createdProductId}`)
+        .set("Authorization", `Bearer ${bearerToken}`)
+        .then((response) => {
+          expect(200).toBe(response.status);
+          expect(response.body).toHaveProperty(
+            "message", "Registro excluído com sucesso"
+          );
+        });
+  });
+
+  it("Deletar usuário cadastrado", () => {
+    return request(apiUrl)
+      .delete(`/usuarios/${createdUserId}`)
+      .then((response) => {
+        expect(200).toBe(response.status);
+        expect(response.body).toHaveProperty(
+          "message", "Registro excluído com sucesso"
         );
       });
   });
@@ -182,9 +206,9 @@ describe("Fluxo de compra: cancelar compra", () => {
       .post("/produtos")
       .set("Authorization", `Bearer ${bearerToken}`)
       .send({
-        nome: `Produto Teste+${Date.now()}`,
+        nome: `Produto Teste ${Date.now()}`,
         preco: 100,
-        descricao: `Descrição do Produto Teste+${Date.now()}`,
+        descricao: `Descrição do Produto Teste ${Date.now()}`,
         quantidade: 10,
       })
       .then((response) => {
@@ -260,6 +284,29 @@ describe("Fluxo de compra: cancelar compra", () => {
         expect(response.body).toHaveProperty(
           "message",
           "Registro excluído com sucesso. Estoque dos produtos reabastecido"
+        );
+      });
+  });
+
+  it("Deletar produto cadastrado", () => {
+      return request(apiUrl)
+        .delete(`/produtos/${createdProductId}`)
+        .set("Authorization", `Bearer ${bearerToken}`)
+        .then((response) => {
+          expect(200).toBe(response.status);
+          expect(response.body).toHaveProperty(
+            "message", "Registro excluído com sucesso"
+          );
+        });
+  });
+
+  it("Deletar usuário cadastrado", () => {
+    return request(apiUrl)
+      .delete(`/usuarios/${createdUserId}`)
+      .then((response) => {
+        expect(200).toBe(response.status);
+        expect(response.body).toHaveProperty(
+          "message", "Registro excluído com sucesso"
         );
       });
   });

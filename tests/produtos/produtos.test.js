@@ -25,9 +25,9 @@ describe("API ServRest - Produtos", () => {
       .post("/produtos")
       .set("Authorization", `Bearer ${bearerToken}`)
       .send({
-        nome: `Produto Teste+${Date.now()}`,
+        nome: `Produto Teste ${Date.now()}`,
         preco: 100,
-        descricao: `Descrição do Produto Teste+${Date.now()}`,
+        descricao: `Descrição do Produto Teste ${Date.now()}`,
         quantidade: 10,
       })
       .then((response) => {
