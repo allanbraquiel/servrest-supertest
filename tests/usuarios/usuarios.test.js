@@ -1,118 +1,136 @@
 const request = require("supertest");
+const Joi = require('joi')
 const apiUrl = "http://localhost:3000";
 
 let createdUserId;
 let bearerToken;
 
 
+// Schema Joi para validar estrutura do usuário
+const usuarioSchema = Joi.object({
+  nome: Joi.string().required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().required(),
+  administrador: Joi.string().valid('true', 'false').required(),
+  _id: Joi.string().required()
+});
+
+
+// Schema para a resposta da listagem de usuários
+const listaUsuariosSchema = Joi.object({
+  quantidade: Joi.number().required(),
+  usuarios: Joi.array().items(usuarioSchema).required()
+});
+
+// Helpers reutilizáveis
+function validarUsuario(usuario) {
+  const { error } = usuarioSchema.validate(usuario);
+  expect(error).toBeUndefined();
+}
+
+function validarListaUsuarios(body) {
+  const { error } = listaUsuariosSchema.validate(body);
+  expect(error).toBeUndefined();
+  // garantir que quantidade corresponde ao tamanho do array
+  expect(body.quantidade).toBe(body.usuarios.length);
+}
+
+
+
 describe("API ServRest - Usuários", () => {
 
-  it("Cadastrar Usuário", () => {
-    return request(apiUrl)
+  it("Cadastrar Usuário", async () => {
+    const nome = `Usuário Teste ${Date.now()}`;
+    const email = `teste+${Date.now()}@exemplo.com`;
+
+    const resCreate = await request(apiUrl)
       .post("/usuarios")
       .send({
-        nome: `Usuário Teste ${Date.now()}`,
-        email: `teste+${Date.now()}@exemplo.com`,
+        nome,
+        email,
         password: "senha123",
         administrador: "false",
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
-
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdUserId = id;
       });
+
+    expect(201).toBe(resCreate.status);
+    expect(resCreate.body).toHaveProperty(
+      "message",
+      "Cadastro realizado com sucesso"
+    );
+
+    const id = resCreate.body._id;
+    expect(id).toBeDefined();
+    createdUserId = id;
+
+    // Buscar e validar o usuário criado
+    const resGet = await request(apiUrl).get(`/usuarios/${createdUserId}`);
+    expect(200).toBe(resGet.status);
+    validarUsuario(resGet.body);
+    expect(resGet.body.nome).toBe(nome);
+    expect(resGet.body.email).toBe(email);
   });
 
-  it("Consultar usuário cadastrado", () => {
-    return request(apiUrl)
-      .get(`/usuarios/${createdUserId}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty("nome");
-        expect(response.body).toHaveProperty("email");
-        expect(response.body).toHaveProperty("administrador");
-      });
+  it("Consultar usuário cadastrado", async () => {
+    const response = await request(apiUrl).get(`/usuarios/${createdUserId}`);
+    expect(200).toBe(response.status);
+    validarUsuario(response.body);
   });
 
-  it("Consultar usuário inválido", () => {
-    return request(apiUrl)
-      .get(`/usuarios/0uxuPY0cbmQhpEz2`)
-      .then((response) => {
-        expect(400).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message", "Usuário não encontrado"
-        );
-      });
+  it("Consultar usuário inválido", async () => {
+    const response = await request(apiUrl).get(`/usuarios/0uxuPY0cbmQhpEz2`);
+    expect(400).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Usuário não encontrado");
+    expect(typeof response.body.message).toBe("string");
   });
 
-  it("Atualizar usuário cadastrado", () => {
-    return request(apiUrl)
+  it("Atualizar usuário cadastrado", async () => {
+    const newNome = "Usuário Teste Atualizado";
+    const newEmail = `teste.atualizado+${Date.now()}@exemplo.com`;
+
+    const resPut = await request(apiUrl)
       .put(`/usuarios/${createdUserId}`)
       .send({
-        nome: "Usuário Teste Atualizado",
-        email: `teste.atualizado+${Date.now()}@exemplo.com`,
+        nome: newNome,
+        email: newEmail,
         password: "senha1234",
         administrador: "true",
-      })
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message", "Registro alterado com sucesso"
-        );
       });
+
+    expect(200).toBe(resPut.status);
+    expect(resPut.body).toHaveProperty("message", "Registro alterado com sucesso");
+
+    const resGet = await request(apiUrl).get(`/usuarios/${createdUserId}`);
+    expect(200).toBe(resGet.status);
+    validarUsuario(resGet.body);
+    expect(resGet.body.nome).toBe(newNome);
+    expect(resGet.body.email).toBe(newEmail);
+    expect(resGet.body.administrador).toBe("true");
   });
 
-  it("Deletar usuário cadastrado", () => {
-    return request(apiUrl)
-      .delete(`/usuarios/${createdUserId}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message", "Registro excluído com sucesso"
-        );
-      });
+  it("Deletar usuário cadastrado", async () => {
+    const resDelete = await request(apiUrl).delete(`/usuarios/${createdUserId}`);
+    expect(200).toBe(resDelete.status);
+    expect(resDelete.body).toHaveProperty("message", "Registro excluído com sucesso");
+
+    const resGetAfterDelete = await request(apiUrl).get(`/usuarios/${createdUserId}`);
+    // depende da API: pode retornar 400 ou 404 para não encontrado
+    expect([400, 404]).toContain(resGetAfterDelete.status);
   });
 
-  it("Listar Usuarios", () => {
-    return request(apiUrl)
-      .get("/usuarios")
-      .then((response) => {
-        expect(200).toBe(response.status);
-      });
+  it("Listar Usuarios", async () => {
+    const response = await request(apiUrl).get("/usuarios");
+    expect(200).toBe(response.status);
+    validarListaUsuarios(response.body);
+    response.body.usuarios.forEach(validarUsuario);
   });
 
   it("Usuarios (estrutura e conteúdo)", async () => {
     const response = await request(apiUrl).get("/usuarios");
     expect(response.status).toBe(200);
+    validarListaUsuarios(response.body);
 
-    const body = response.body;
-
-    // Estrutura principal
-    expect(body).toHaveProperty("quantidade");
-    expect(body).toHaveProperty("usuarios");
-    // validações para o primeiro usuário, caso exista
-    if (body.usuarios.length > 0) {
-      const user = body.usuarios[0];
-
-      // Validação das propriedades
-      expect(user).toHaveProperty("nome");
-      expect(user).toHaveProperty("email");
-      expect(user).toHaveProperty("password");
-      expect(user).toHaveProperty("administrador");
-      expect(user).toHaveProperty("_id");
-
-      // Validação dos tipos de dados
-      expect(typeof user.nome).toBe("string");
-      expect(typeof user.email).toBe("string");
-      expect(typeof user.password).toBe("string");
-      expect(typeof user.administrador).toBe("string");
-      expect(typeof user._id).toBe("string");
+    if (response.body.usuarios.length > 0) {
+      validarUsuario(response.body.usuarios[0]);
     }
   });
 });
