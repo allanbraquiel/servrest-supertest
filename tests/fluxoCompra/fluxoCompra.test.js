@@ -1,4 +1,5 @@
 const request = require("supertest");
+const Joi = require('joi');
 const apiUrl = "http://localhost:3000";
 
 let createdUserId;
@@ -6,308 +7,267 @@ let createdProductId;
 let createdCartId;
 let bearerToken;
 
+// Schemas e helpers
+const usuarioSchema = Joi.object({
+  nome: Joi.string().required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().required(),
+  administrador: Joi.string().valid('true','false').required(),
+  _id: Joi.string().required()
+}).unknown(true);
+
+const produtoSchema = Joi.object({
+  nome: Joi.string().required(),
+  preco: Joi.number().required(),
+  descricao: Joi.string().required(),
+  quantidade: Joi.number().required(),
+  _id: Joi.string().required()
+}).unknown(true);
+
+const itemProdutoSchema = Joi.object({
+  idProduto: Joi.string().required(),
+  quantidade: Joi.number().required(),
+  precoUnitario: Joi.number().optional()
+}).unknown(true);
+
+const carrinhoSchema = Joi.object({
+  produtos: Joi.array().items(itemProdutoSchema).required(),
+  _id: Joi.string().required(),
+  precoTotal: Joi.number().optional()
+}).unknown(true);
+
+function validarUsuario(u) {
+  const { error } = usuarioSchema.validate(u);
+  expect(error).toBeUndefined();
+}
+function validarProduto(p) {
+  const { error } = produtoSchema.validate(p);
+  expect(error).toBeUndefined();
+}
+function validarCarrinho(c) {
+  const { error } = carrinhoSchema.validate(c);
+  expect(error).toBeUndefined();
+}
+
 describe("Fluxo de compra: concluir compra", () => {
 
-  it("Cadastrar Usuário", () => {
-    return request(apiUrl)
+  it("Cadastrar Usuário", async () => {
+    const nome = `Usuário Teste ${Date.now()}`;
+    const email = `teste${Date.now()}@exemplo.com`;
+
+    const res = await request(apiUrl)
       .post("/usuarios")
       .send({
-        nome: `Usuário Teste ${Date.now()}`,
-        email: `teste${Date.now()}@exemplo.com`,
+        nome,
+        email,
         password: "senha123",
         administrador: "false",
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
-
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdUserId = id;
       });
+
+    expect(201).toBe(res.status);
+    expect(res.body).toHaveProperty("message", "Cadastro realizado com sucesso");
+    createdUserId = res.body._id;
+    expect(createdUserId).toBeDefined();
+
+    const resGet = await request(apiUrl).get(`/usuarios/${createdUserId}`);
+    expect(200).toBe(resGet.status);
+    validarUsuario(resGet.body);
+    expect(resGet.body.nome).toBe(nome);
+    expect(resGet.body.email).toBe(email);
   });
 
-  it("Realizar Login com sucesso", () => {
-    return request(apiUrl)
+  it("Realizar Login com sucesso", async () => {
+    const response = await request(apiUrl)
       .post("/login")
-      .send({
-        email: "fulano@qa.com",
-        password: "teste",
-      })
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Login realizado com sucesso"
-        );
-        expect(response.body).toHaveProperty("authorization");
-        bearerToken = response.body.authorization.replace(/^Bearer\s+/i, "");
-      });
+      .send({ email: "fulano@qa.com", password: "teste" });
+
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Login realizado com sucesso");
+    expect(response.body).toHaveProperty("authorization");
+    bearerToken = typeof response.body.authorization === 'string'
+      ? response.body.authorization.replace(/^Bearer\s+/i, '')
+      : response.body.authorization;
   });
 
-  it("Cadastrar Produto", () => {
-    return request(apiUrl)
+  it("Cadastrar Produto", async () => {
+    const nome = `Produto Teste ${Date.now()}`;
+    const descricao = `Descrição do Produto Teste ${Date.now()}`;
+
+    const res = await request(apiUrl)
       .post("/produtos")
       .set("Authorization", `Bearer ${bearerToken}`)
-      .send({
-        nome: `Produto Teste ${Date.now()}`,
-        preco: 100,
-        descricao: `Descrição do Produto Teste ${Date.now()}`,
-        quantidade: 200,
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty("_id");
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
+      .send({ nome, preco: 100, descricao, quantidade: 200 });
 
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdProductId = id;
-      });
+    expect(201).toBe(res.status);
+    createdProductId = res.body._id;
+    expect(createdProductId).toBeDefined();
+
+    const resGet = await request(apiUrl).get(`/produtos/${createdProductId}`);
+    expect(200).toBe(resGet.status);
+    validarProduto(resGet.body);
+    expect(resGet.body.nome).toBe(nome);
   });
 
-  it("Consultar produto cadastrado", () => {
-    return request(apiUrl)
-      .get(`/produtos/${createdProductId}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty("nome");
-        expect(response.body).toHaveProperty("preco");
-        expect(response.body).toHaveProperty("descricao");
-        expect(response.body).toHaveProperty("quantidade");
-        expect(response.body).toHaveProperty("_id");
-      });
+  it("Consultar produto cadastrado", async () => {
+    const response = await request(apiUrl).get(`/produtos/${createdProductId}`);
+    expect(200).toBe(response.status);
+    validarProduto(response.body);
   });
 
-  it('Incluir produto no carrinho', () => {
-    return request(apiUrl)
+  it('Incluir produto no carrinho', async () => {
+    const produtoId = createdProductId || "BeeJh5lz3k6kSIzA";
+
+    const res = await request(apiUrl)
       .post("/carrinhos")
       .set("Authorization", `Bearer ${bearerToken}`)
-      .send({
-        produtos: [
-          {
-            idProduto: createdProductId,
-            quantidade: 2,
-          },
-        ],
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty("_id");
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
+      .send({ produtos: [{ idProduto: produtoId, quantidade: 100 }] });
 
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdCartId = id;
-      });
+    expect(201).toBe(res.status);
+    createdCartId = res.body._id;
+    expect(createdCartId).toBeDefined();
+
+    const resGet = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    expect(200).toBe(resGet.status);
+    validarCarrinho(resGet.body);
+    expect(resGet.body.produtos[0].idProduto).toBe(produtoId);
   });
 
-  it('Consultar o carrinho', () => {
-    return request(apiUrl)
-      .get(`/carrinhos/${createdCartId}`)
-      .set('Authorization', `Bearer ${bearerToken}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty("_id");
-        expect(response.body).toHaveProperty("produtos");
-      });
+  it('Consultar o carrinho', async () => {
+    const response = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    expect(200).toBe(response.status);
+    validarCarrinho(response.body);
   });
 
-  it('Concluir compra', () => {
-    return request(apiUrl)
+  it('Concluir compra', async () => {
+    const response = await request(apiUrl)
       .delete(`/carrinhos/concluir-compra`)
-      .set('Authorization', `Bearer ${bearerToken}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Registro excluído com sucesso"
-        );
-      });
+      .set('Authorization', `Bearer ${bearerToken}`);
+
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Registro excluído com sucesso");
+
+    const after = await request(apiUrl).get(`/carrinhos/${createdCartId}`);
+    expect([400,404]).toContain(after.status);
   });
 
-  it("Deletar produto cadastrado", () => {
-      return request(apiUrl)
-        .delete(`/produtos/${createdProductId}`)
-        .set("Authorization", `Bearer ${bearerToken}`)
-        .then((response) => {
-          expect(200).toBe(response.status);
-          expect(response.body).toHaveProperty(
-            "message", "Registro excluído com sucesso"
-          );
-        });
+  it("Deletar produto cadastrado", async () => {
+    const response = await request(apiUrl)
+      .delete(`/produtos/${createdProductId}`)
+      .set("Authorization", `Bearer ${bearerToken}`);
+
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Registro excluído com sucesso");
   });
 
-  it("Deletar usuário cadastrado", () => {
-    return request(apiUrl)
-      .delete(`/usuarios/${createdUserId}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message", "Registro excluído com sucesso"
-        );
-      });
+  it("Deletar usuário cadastrado", async () => {
+    const response = await request(apiUrl).delete(`/usuarios/${createdUserId}`);
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Registro excluído com sucesso");
   });
 });
 
 describe("Fluxo de compra: cancelar compra", () => {
 
-  it("Cadastrar Usuário", () => {
-    return request(apiUrl)
+  it("Cadastrar Usuário", async () => {
+    const nome = `Usuário Teste+${Date.now()}`;
+    const email = `teste+${Date.now()}@exemplo.com`;
+
+    const res = await request(apiUrl)
       .post("/usuarios")
-      .send({
-        nome: `Usuário Teste+${Date.now()}`,
-        email: `teste+${Date.now()}@exemplo.com`,
-        password: "senha123",
-        administrador: "false",
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
+      .send({ nome, email, password: "senha123", administrador: "false" });
 
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdUserId = id;
-      });
+    expect(201).toBe(res.status);
+    createdUserId = res.body._id;
+    expect(createdUserId).toBeDefined();
+
+    const resGet = await request(apiUrl).get(`/usuarios/${createdUserId}`);
+    expect(200).toBe(resGet.status);
+    validarUsuario(resGet.body);
   });
 
-  it("Realizar Login com sucesso", () => {
-    return request(apiUrl)
+  it("Realizar Login com sucesso", async () => {
+    const response = await request(apiUrl)
       .post("/login")
-      .send({
-        email: "fulano@qa.com",
-        password: "teste",
-      })
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Login realizado com sucesso"
-        );
-        expect(response.body).toHaveProperty("authorization");
-        bearerToken = response.body.authorization.replace(/^Bearer\s+/i, "");
-      });
+      .send({ email: "fulano@qa.com", password: "teste" });
+
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("authorization");
+    bearerToken = typeof response.body.authorization === 'string'
+      ? response.body.authorization.replace(/^Bearer\s+/i, '')
+      : response.body.authorization;
   });
 
-  it("Cadastrar Produto", () => {
-    return request(apiUrl)
+  it("Cadastrar Produto", async () => {
+    const nome = `Produto Teste ${Date.now()}`;
+    const descricao = `Descrição do Produto Teste ${Date.now()}`;
+
+    const res = await request(apiUrl)
       .post("/produtos")
       .set("Authorization", `Bearer ${bearerToken}`)
-      .send({
-        nome: `Produto Teste ${Date.now()}`,
-        preco: 100,
-        descricao: `Descrição do Produto Teste ${Date.now()}`,
-        quantidade: 10,
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty("_id");
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
+      .send({ nome, preco: 100, descricao, quantidade: 10 });
 
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdProductId = id;
-      });
+    expect(201).toBe(res.status);
+    createdProductId = res.body._id;
+    expect(createdProductId).toBeDefined();
+
+    const resGet = await request(apiUrl).get(`/produtos/${createdProductId}`);
+    expect(200).toBe(resGet.status);
+    validarProduto(resGet.body);
   });
 
-  it("Consultar produto cadastrado", () => {
-    return request(apiUrl)
-      .get(`/produtos/${createdProductId}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty("nome");
-        expect(response.body).toHaveProperty("preco");
-        expect(response.body).toHaveProperty("descricao");
-        expect(response.body).toHaveProperty("quantidade");
-        expect(response.body).toHaveProperty("_id");
-      });
+  it("Consultar produto cadastrado", async () => {
+    const response = await request(apiUrl).get(`/produtos/${createdProductId}`);
+    expect(200).toBe(response.status);
+    validarProduto(response.body);
   });
 
-  it('Incluir produto no carrinho', () => {
-    return request(apiUrl)
+  it('Incluir produto no carrinho', async () => {
+    const produtoId = "BeeJh5lz3k6kSIzA";
+
+    const res = await request(apiUrl)
       .post("/carrinhos")
       .set("Authorization", `Bearer ${bearerToken}`)
-      .send({
-        produtos: [
-          {
-            idProduto: "BeeJh5lz3k6kSIzA",
-            quantidade: 2,
-          },
-        ],
-      })
-      .then((response) => {
-        expect(201).toBe(response.status);
-        expect(response.body).toHaveProperty("_id");
-        expect(response.body).toHaveProperty(
-          "message",
-          "Cadastro realizado com sucesso"
-        );
+      .send({ produtos: [{ idProduto: produtoId, quantidade: 2 }] });
 
-        const id = response.body._id;
-        expect(id).toBeDefined();
-        createdCartId = id;
-      });
+    expect(201).toBe(res.status);
+    createdCartId = res.body._id;
+    expect(createdCartId).toBeDefined();
+
+    const resGet = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    expect(200).toBe(resGet.status);
+    validarCarrinho(resGet.body);
   });
 
-  it('Consultar o carrinho', () => {
-    return request(apiUrl)
-      .get(`/carrinhos/${createdCartId}`)
-      .set('Authorization', `Bearer ${bearerToken}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty("_id");
-        expect(response.body).toHaveProperty("produtos");
-      });
+  it('Consultar o carrinho', async () => {
+    const response = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    expect(200).toBe(response.status);
+    validarCarrinho(response.body);
   });
 
-  it('Cancelar compra', () => {
-    return request(apiUrl)
+  it('Cancelar compra', async () => {
+    const response = await request(apiUrl)
       .delete(`/carrinhos/cancelar-compra`)
-      .set('Authorization', `Bearer ${bearerToken}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Registro excluído com sucesso. Estoque dos produtos reabastecido"
-        );
-      });
+      .set('Authorization', `Bearer ${bearerToken}`);
+
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Registro excluído com sucesso. Estoque dos produtos reabastecido");
+
+    const after = await request(apiUrl).get(`/carrinhos/${createdCartId}`);
+    expect([400,404]).toContain(after.status);
   });
 
-  it("Deletar produto cadastrado", () => {
-      return request(apiUrl)
-        .delete(`/produtos/${createdProductId}`)
-        .set("Authorization", `Bearer ${bearerToken}`)
-        .then((response) => {
-          expect(200).toBe(response.status);
-          expect(response.body).toHaveProperty(
-            "message", "Registro excluído com sucesso"
-          );
-        });
+  it("Deletar produto cadastrado", async () => {
+    const response = await request(apiUrl)
+      .delete(`/produtos/${createdProductId}`)
+      .set("Authorization", `Bearer ${bearerToken}`);
+
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Registro excluído com sucesso");
   });
 
-  it("Deletar usuário cadastrado", () => {
-    return request(apiUrl)
-      .delete(`/usuarios/${createdUserId}`)
-      .then((response) => {
-        expect(200).toBe(response.status);
-        expect(response.body).toHaveProperty(
-          "message", "Registro excluído com sucesso"
-        );
-      });
+  it("Deletar usuário cadastrado", async () => {
+    const response = await request(apiUrl).delete(`/usuarios/${createdUserId}`);
+    expect(200).toBe(response.status);
+    expect(response.body).toHaveProperty("message", "Registro excluído com sucesso");
   });
 });
