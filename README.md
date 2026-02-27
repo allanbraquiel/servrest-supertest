@@ -107,6 +107,3 @@ Exemplo sugerido para `package.json` (opcional):
 ## Observações finais
 
 - O objetivo deste repositório é testar uma API externa (`ServRest`). Os testes assumem comportamento e mensagens específicas da API — se a API mudar, os testes devem ser atualizados.
-- Se quiser, posso atualizar o `package.json` para tornar `npm test` funcional.
-
----
