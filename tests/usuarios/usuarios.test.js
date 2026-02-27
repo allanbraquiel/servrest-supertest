@@ -3,8 +3,6 @@ const Joi = require('joi')
 const apiUrl = "http://localhost:3000";
 
 let createdUserId;
-let bearerToken;
-
 
 // Schema Joi para validar estrutura do usuário
 const usuarioSchema = Joi.object({
@@ -34,8 +32,6 @@ function validarListaUsuarios(body) {
   // garantir que quantidade corresponde ao tamanho do array
   expect(body.quantidade).toBe(body.usuarios.length);
 }
-
-
 
 describe("API ServRest - Usuários", () => {
 

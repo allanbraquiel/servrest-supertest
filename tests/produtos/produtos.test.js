@@ -68,7 +68,6 @@ describe("API ServRest - Produtos", () => {
     expect(id).toBeDefined();
     createdProductId = id;
 
-    // Validar via GET
     const resGet = await request(apiUrl).get(`/produtos/${createdProductId}`);
     expect(200).toBe(resGet.status);
     validarProduto(resGet.body);

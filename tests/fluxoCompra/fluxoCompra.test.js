@@ -126,14 +126,19 @@ describe("Fluxo de compra: concluir compra", () => {
     createdCartId = res.body._id;
     expect(createdCartId).toBeDefined();
 
-    const resGet = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    const resGet = await request(apiUrl)
+      .get(`/carrinhos/${createdCartId}`)
+      .set('Authorization', `Bearer ${bearerToken}`);
+
     expect(200).toBe(resGet.status);
     validarCarrinho(resGet.body);
     expect(resGet.body.produtos[0].idProduto).toBe(produtoId);
   });
 
   it('Consultar o carrinho', async () => {
-    const response = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    const response = await request(apiUrl)
+      .get(`/carrinhos/${createdCartId}`)
+      .set('Authorization', `Bearer ${bearerToken}`);
     expect(200).toBe(response.status);
     validarCarrinho(response.body);
   });
@@ -233,13 +238,17 @@ describe("Fluxo de compra: cancelar compra", () => {
     createdCartId = res.body._id;
     expect(createdCartId).toBeDefined();
 
-    const resGet = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    const resGet = await request(apiUrl)
+      .get(`/carrinhos/${createdCartId}`)
+      .set('Authorization', `Bearer ${bearerToken}`);
     expect(200).toBe(resGet.status);
     validarCarrinho(resGet.body);
   });
 
   it('Consultar o carrinho', async () => {
-    const response = await request(apiUrl).get(`/carrinhos/${createdCartId}`).set('Authorization', `Bearer ${bearerToken}`);
+    const response = await request(apiUrl)
+      .get(`/carrinhos/${createdCartId}`)
+      .set('Authorization', `Bearer ${bearerToken}`);
     expect(200).toBe(response.status);
     validarCarrinho(response.body);
   });
